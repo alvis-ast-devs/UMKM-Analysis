@@ -11,7 +11,7 @@ export type DiagnosticVariant = 'PRIMA_HIJAU' | 'KRITIS_MERAH';
 
 export interface DiagnosticResult {
   variant: DiagnosticVariant;
-  status: 'CRITICAL' | 'ELITE' | 'PRIMA';
+  status: 'CRITICAL' | 'STRUGGLING' | 'ELITE' | 'GROWTH' | 'PRIMA';
   status_id: 0 | 1 | 2;
   health_score: number;
   confidence: number;
