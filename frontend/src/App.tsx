@@ -1,446 +1,293 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
 import {
-  INITIAL_UMKM_RECORDS,
-  runLocalUMKMInference,
-} from './data/umkmDataset';
-import {
-  UMKMRecord,
-  UMKMInputPayload,
-  FlaskBackendConfig,
+  DiagnosticInput,
+  DiagnosticResult,
+  DiagnosticPreset,
 } from './types/umkm';
-import { DashboardAnalyticsView } from './components/DashboardAnalyticsView';
-import { UMKMInputSimulator } from './components/UMKMInputSimulator';
-import { PortfolioDirectoryView } from './components/PortfolioDirectoryView';
-import { FlaskIntegrationView } from './components/FlaskIntegrationView';
-import { exportUMKMReportToPDF } from './utils/pdfExporter';
-import { FileDown, Building2, CheckCircle2 } from 'lucide-react';
+import { DiagnosticForm } from './components/DiagnosticForm';
+import { DiagnosticResultCard } from './components/DiagnosticResultCard';
+import { Toast } from './components/Toast';
 
-type ActiveSection = 'DASHBOARD' | 'SIMULATOR' | 'PORTFOLIO' | 'FLASK_API';
+const PRESETS: DiagnosticPreset[] = [
+  {
+    label: 'Kritis',
+    values: {
+      netProfitMargin: -12.4,
+      burnRateRatio: 1.35,
+      repeatOrderRate: 11.2,
+      transactionCount: 45,
+      peakHourLatency: 'High',
+    },
+  },
+  {
+    label: 'Elite',
+    values: {
+      netProfitMargin: 24.8,
+      burnRateRatio: 0.62,
+      repeatOrderRate: 46.5,
+      transactionCount: 380,
+      peakHourLatency: 'Low',
+    },
+  },
+];
 
 export default function App() {
-  const [records, setRecords] = useState<UMKMRecord[]>(INITIAL_UMKM_RECORDS);
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_UMKM_RECORDS[0].input.id);
-  const [activeSection, setActiveSection] = useState<ActiveSection>('DASHBOARD');
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [toastNotice, setToastNotice] = useState<string | null>(null);
-
-  const [flaskConfig, setFlaskConfig] = useState<FlaskBackendConfig>({
-    endpointUrl: 'http://127.0.0.1:5000/api/v1/predict-umkm',
-    mode: 'SIMULASI_LOKAL',
-    timeoutMs: 5000,
-    connectionStatus: 'UNTESTED',
+    const [input, setInput] = useState<DiagnosticInput>({
+    netProfitMargin: 24.5,
+    burnRateRatio: 0.68,
+    repeatOrderRate: 42.0,
+    transactionCount: 480,
+    peakHourLatency: 'Low',
   });
+  const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const activeRecord =
-    records.find((r) => r.input.id === selectedId) || records[0];
-
-  const triggerToast = (msg: string) => {
-    setToastNotice(msg);
-    setTimeout(() => {
-      setToastNotice(null);
-    }, 4000);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const handleRunAnalysis = async (
-    updatedInput: UMKMInputPayload,
-    createAsNew: boolean
-  ) => {
-    setIsAnalyzing(true);
-
-    // Compute local deterministic baseline & full chart metrics
-    let prediction = runLocalUMKMInference(updatedInput);
-
-    // If user enabled Live Flask Endpoint mode, attempt real HTTP POST to their Flask server
-    if (flaskConfig.mode === 'FLASK_API_LIVE' && flaskConfig.endpointUrl) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), flaskConfig.timeoutMs);
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (flaskConfig.apiKeyHeader) {
-          headers['Authorization'] = flaskConfig.apiKeyHeader;
-        }
-
-        const response = await fetch(flaskConfig.endpointUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            umkm_id: updatedInput.id,
-            nama_usaha: updatedInput.namaUsaha,
-            sektor: updatedInput.sektor,
-            features: {
-              omzet_bulanan_juta: updatedInput.omzetBulananRataRataJuta,
-              pertumbuhan_omzet_mom_persen: updatedInput.pertumbuhanOmzetMoMPersen,
-              margin_laba_bersih_persen: updatedInput.marginLabaBersihPersen,
-              rasio_arus_kas_operasional: updatedInput.rasioArusKasOperasional,
-              rasio_utang_terhadap_aset_persen: updatedInput.rasioUtangTerhadapAsetPersen,
-              tingkat_retensi_pelanggan_persen: updatedInput.tingkatRetensiPelangganPersen,
-              skor_adopsi_digital: updatedInput.skorAdopsiDigital,
-              rasio_penjualan_online_persen: updatedInput.rasioPenjualanOnlinePersen,
-              perputaran_persediaan_hari: updatedInput.perputaranPersediaanHari,
-            },
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timer);
-
-        if (response.ok) {
-          const flaskData = await response.json();
-          prediction = {
-            ...prediction,
-            status: flaskData.status || prediction.status,
-            growthProbabilityScore:
-              typeof flaskData.growthProbabilityScore === 'number'
-                ? flaskData.growthProbabilityScore
-                : prediction.growthProbabilityScore,
-            modelConfidencePersen:
-              typeof flaskData.modelConfidencePersen === 'number'
-                ? flaskData.modelConfidencePersen
-                : prediction.modelConfidencePersen,
-          };
-          setFlaskConfig((prev) => ({
-            ...prev,
-            connectionStatus: 'CONNECTED',
-            errorMessage: 'Berhasil menerima hasil inferensi dari server Flask Python.',
-          }));
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
-      } catch {
-        setFlaskConfig((prev) => ({
-          ...prev,
-          connectionStatus: 'ERROR',
-          errorMessage:
-            'Server Flask lokal belum merespons. Hasil dihitung menggunakan mesin inferensi lokal yang terkalibrasi.',
-        }));
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 320));
+  const loadPreset = (label: string) => {
+    const preset = PRESETS.find((p) => p.label === label);
+    if (preset) {
+      setInput(preset.values);
+      showToast(`Preset "${label}" dimuat.`);
     }
-
-    const newRecord: UMKMRecord = {
-      input: updatedInput,
-      analysis: prediction,
-    };
-
-    if (createAsNew) {
-      setRecords((prev) => [newRecord, ...prev]);
-      setSelectedId(newRecord.input.id);
-      triggerToast(`Entitas baru "${updatedInput.namaUsaha}" berhasil dianalisis (${prediction.status}).`);
-    } else {
-      setRecords((prev) =>
-        prev.map((item) => (item.input.id === updatedInput.id ? newRecord : item))
-      );
-      triggerToast(`Analisis "${updatedInput.namaUsaha}" diperbarui: Status ${prediction.status} (${prediction.growthProbabilityScore}/100).`);
-    }
-
-    setIsAnalyzing(false);
-    setActiveSection('DASHBOARD');
   };
 
-  const handleTestFlaskConnection = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    // Simulate call to Python backend; fallback logic matches code.html behavior
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), flaskConfig.timeoutMs);
+      const timeout = setTimeout(() => controller.abort(), 1800);
 
-      const response = await fetch(flaskConfig.endpointUrl, {
+      const response = await fetch('http://localhost:8000/predict-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          umkm_id: activeRecord.input.id,
-          features: {
-            omzet_bulanan_juta: activeRecord.input.omzetBulananRataRataJuta,
-            pertumbuhan_omzet_mom_persen: activeRecord.input.pertumbuhanOmzetMoMPersen,
-            margin_laba_bersih_persen: activeRecord.input.marginLabaBersihPersen,
-            rasio_arus_kas_operasional: activeRecord.input.rasioArusKasOperasional,
-            tingkat_retensi_pelanggan_persen: activeRecord.input.tingkatRetensiPelangganPersen,
-            skor_adopsi_digital: activeRecord.input.skorAdopsiDigital,
-            perputaran_persediaan_hari: activeRecord.input.perputaranPersediaanHari,
-          },
+          net_profit_margin: input.netProfitMargin,
+          burn_rate_ratio: input.burnRateRatio,
+          repeat_order_rate: input.repeatOrderRate,
+          transaction_count: input.transactionCount,
+          peak_hour_latency: input.peakHourLatency,
         }),
         signal: controller.signal,
       });
 
-      clearTimeout(timer);
+      clearTimeout(timeout);
 
       if (response.ok) {
-        setFlaskConfig((prev) => ({
-          ...prev,
-          connectionStatus: 'CONNECTED',
-          errorMessage: 'Koneksi ke endpoint Flask Python berhasil diverifikasi (HTTP 200 OK).',
-        }));
-        triggerToast('Terhubung ke endpoint Flask Python!');
+        const data = await response.json();
+        setResult(data as DiagnosticResult);
       } else {
-        throw new Error(`Status HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}`);
       }
     } catch {
-      setFlaskConfig((prev) => ({
-        ...prev,
-        connectionStatus: 'ERROR',
-        errorMessage:
-          'Tidak dapat menjangkau server Flask pada URL tersebut. Pastikan server Flask berjalan & CORS aktif. Mode fallback lokal tetap menjaga aplikasi berjalan penuh.',
-      }));
-      triggerToast('Endpoint Flask belum aktif — menggunakan mesin inferensi lokal.');
+      // Fallback client-side rule-based logic (matches code.html)
+      await new Promise((r) => setTimeout(r, 650));
+
+      const isCritical =
+        input.burnRateRatio > 1.05 ||
+        input.netProfitMargin < 0 ||
+        (input.repeatOrderRate < 15 && input.transactionCount < 80);
+
+      const isPrima =
+        input.netProfitMargin > 10 &&
+        input.burnRateRatio < 0.9 &&
+        input.repeatOrderRate >= 35 &&
+        input.transactionCount >= 200;
+
+      const fallbackResult: DiagnosticResult = isCritical
+        ? {
+            variant: 'KRITIS_MERAH',
+            status: 'CRITICAL',
+            status_id: 0,
+            health_score: Math.max(
+              18,
+              Math.round(50 - input.burnRateRatio * 15 + input.netProfitMargin * 0.8)
+            ),
+            confidence: 0.948,
+            risk_level: 'Tinggi (High Vulnerability)',
+            metrics_summary: {
+              net_profit_margin: input.netProfitMargin,
+              burn_rate_ratio: input.burnRateRatio,
+              repeat_order_rate: input.repeatOrderRate,
+              transaction_count: input.transactionCount,
+              peak_hour_latency: input.peakHourLatency,
+            },
+            ai_narration: `Penyebab utama status [CRITICAL] adalah Burn Rate Ratio (${input.burnRateRatio}x) yang telah melampaui ambang batas aman 1.0, diperburuk dengan Net Profit Margin sebesar ${input.netProfitMargin}%. Kondisi ini mengindikasikan struktur kas operasional mengalami defisit dan rentan terhadap kehabisan runway dalam kuartal mendatang jika efisiensi biaya tidak segera diberlakukan.`,
+            prescriptive_actions: [
+              `Lakukan audit rasio pengeluaran operasional (Opex) untuk menekan Burn Rate ke bawah 0.9x.`,
+              `Restrukturisasi margin harga produk atau kurangi diskon yang menggerus profit bersih (${input.netProfitMargin}%).`,
+              `Tingkatkan program retensi pelanggan untuk mendongkrak Repeat Order dari ${input.repeatOrderRate}% menjadi minimal 25%.`,
+            ],
+            shap_top_drivers: [
+              { feature: 'burn_rate_ratio', impact: '+42% risk' },
+              { feature: 'net_profit_margin', impact: '+35% risk' },
+              { feature: 'repeat_order_rate', impact: '+15% risk' },
+            ],
+            timestamp: new Date().toISOString(),
+          }
+        : isPrima
+        ? {
+            variant: 'PRIMA_HIJAU',
+            status: 'PRIMA',
+            status_id: 2,
+            health_score: 92,
+            confidence: 0.982,
+            risk_level: 'Sangat Sehat',
+            metrics_summary: {
+              net_profit_margin: input.netProfitMargin,
+              burn_rate_ratio: input.burnRateRatio,
+              repeat_order_rate: input.repeatOrderRate,
+              transaction_count: input.transactionCount,
+              peak_hour_latency: input.peakHourLatency,
+            },
+            ai_narration: `Kesehatan operasional dan finansial usaha Anda berada pada level prima. Margin keuntungan bersih sangat sehat di angka <span class="text-emerald-400 font-semibold font-mono">+${input.netProfitMargin}%</span> dengan arus kas surplus (<span class="text-emerald-400 font-semibold font-mono">Burn Rate Ratio ${input.burnRateRatio}x</span>). Tingkat repeat order <span class="text-emerald-400 font-semibold font-mono">${input.repeatOrderRate}%</span> mencerminkan loyalitas pelanggan yang solid dan pondasi pertumbuhan yang berkelanjutan.`,
+            prescriptive_actions: [
+              `<strong>Ekspansi Skala Operasional:</strong> Alokasikan sebagian surplus laba bersih untuk memperluas jangkauan pasar atau membuka cabang baru.`,
+              `<strong>Program VIP & Maksimalisasi LTV:</strong> Optimalkan basis pelanggan setia (repeat order ${input.repeatOrderRate}%) dengan penawaran eksklusif dan paket bundling ber-margin tinggi.`,
+              `<strong>Dana Cadangan & Investasi Otomatisasi:</strong> Bentuk cadangan kas darurat minimum 6 bulan operasional dan mulai otomatisasi alur kerja guna menjaga kecepatan layanan prima saat skala bertambah.`,
+            ],
+            shap_top_drivers: [
+              { feature: 'net_profit_margin', impact: '+45% health' },
+              { feature: 'burn_rate_ratio', impact: '+30% health' },
+              { feature: 'repeat_order_rate', impact: '+18% health' },
+            ],
+            timestamp: new Date().toISOString(),
+          }
+        : {
+            variant: 'KRITIS_MERAH',
+            status: 'ELITE',
+            status_id: 1,
+            health_score: Math.min(
+              98,
+              Math.round(
+                75 + input.netProfitMargin * 0.5 + input.repeatOrderRate * 0.3 - input.burnRateRatio * 10
+              )
+            ),
+            confidence: 0.962,
+            risk_level: 'Rendah (Sustainable Growth)',
+            metrics_summary: {
+              net_profit_margin: input.netProfitMargin,
+              burn_rate_ratio: input.burnRateRatio,
+              repeat_order_rate: input.repeatOrderRate,
+              transaction_count: input.transactionCount,
+              peak_hour_latency: input.peakHourLatency,
+            },
+            ai_narration: `Bisnis tergolong [ELITE] berkat rasio profitabilitas bersih yang kokoh (${input.netProfitMargin}%) serta kendali Burn Rate (${input.burnRateRatio}x) yang sangat sehat di bawah 1.0. Retensi repeat order (${input.repeatOrderRate}%) menunjukkan kepuasan pelanggan yang solid dan basis pelanggan loyal yang menjamin arus kas berkelanjutan.`,
+            prescriptive_actions: [
+              `Pertahankan efisiensi operasional sembari mengalokasikan free cash flow untuk ekspansi kanal penjualan baru.`,
+              `Optimalkan kapasitas produksi untuk mengantisipasi kenaikan volume dari ${input.transactionCount} transaksi bulanan.`,
+              `Jaga waktu tunggu pesanan (${input.peakHourLatency} Latency) agar tidak terjadi degradasi kepuasan pembeli loyal.`,
+            ],
+            shap_top_drivers: [
+              { feature: 'net_profit_margin', impact: '+45% health' },
+              { feature: 'burn_rate_ratio', impact: '+30% health' },
+              { feature: 'repeat_order_rate', impact: '+18% health' },
+            ],
+            timestamp: new Date().toISOString(),
+          };
+
+      setResult(fallbackResult);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleExportPDF = (recordToExport: UMKMRecord = activeRecord) => {
-    exportUMKMReportToPDF(recordToExport);
-    triggerToast(`Laporan PDF untuk "${recordToExport.input.namaUsaha}" berhasil diunduh.`);
+  const reset = () => {
+    setResult(null);
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900">
-      {/* Strict 3-Zone Top Bar Contract */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between">
-        {/* Zone 1: Single text element wordmark */}
-        <a
-          href="#dashboard"
-          onClick={(e) => {
-            e.preventDefault();
-            setActiveSection('DASHBOARD');
-          }}
-          className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap"
-        >
-          KatalisUMKM
-        </a>
-
-        {/* Zone 2: 4 clean text navigation links */}
-        <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
-          <button
-            type="button"
-            onClick={() => setActiveSection('DASHBOARD')}
-            className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
-              activeSection === 'DASHBOARD'
-                ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-2 decoration-slate-900'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            Dashboard Analisis
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('SIMULATOR')}
-            className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
-              activeSection === 'SIMULATOR'
-                ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-2 decoration-slate-900'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            Simulasi & Input Data
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('PORTFOLIO')}
-            className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
-              activeSection === 'PORTFOLIO'
-                ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-2 decoration-slate-900'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            Portofolio UMKM
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('FLASK_API')}
-            className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
-              activeSection === 'FLASK_API'
-                ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-2 decoration-slate-900'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            Integrasi Flask API
-          </button>
-        </nav>
-
-        {/* Zone 3: Primary action */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleExportPDF(activeRecord)}
-            className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-            Unduh Laporan PDF
-          </button>
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center space-x-3.5">
+            <div className="relative w-10 h-10 rounded-lg bg-slate-950 flex items-center justify-center shadow-sm text-white font-mono font-bold tracking-tight border border-slate-800">
+              <span className="text-sm tracking-widest text-slate-100 font-semibold">AOL</span>
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">
+                  AOL AI
+                  <span className="ml-2.5 text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 tracking-wider uppercase">
+                    Executive Diagnostic
+                  </span>
+                </h1>
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 tracking-tight">
+                AI-Powered Business Sustainability & Explainable Insights
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center space-x-2 text-xs font-mono bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="font-medium text-slate-700">Online</span>
+          </div>
         </div>
       </header>
 
-      {/* Contextual Workspace Selector Strip */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3">
-        <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
-            <label
-              htmlFor="umkm-selector"
-              className="text-xs font-medium text-slate-600 whitespace-nowrap"
-            >
-              Entitas UMKM Aktif:
-            </label>
-            <select
-              id="umkm-selector"
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 cursor-pointer"
-            >
-              {records.map((r) => (
-                <option key={r.input.id} value={r.input.id}>
-                  {r.input.namaUsaha} ({r.input.sektor}) — [{r.analysis.status}:{' '}
-                  {r.analysis.growthProbabilityScore}/100]
-                </option>
-              ))}
-            </select>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8 p-5 sm:p-6 rounded-2xl bg-slate-950 text-white shadow-sm border border-slate-800">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-slate-900 text-slate-300 text-xs font-mono font-medium mb-2.5 border border-slate-800">
+            <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span className="tracking-wider uppercase text-[10px] text-slate-300">Analisis Prediktif • Deteksi Risiko Keuangan • Rekomendasi Solutif</span>
           </div>
+          <h2 className="text-lg sm:text-xl font-semibold text-white tracking-tight">
+            Evaluasi Kesehatan Bisnis & Rekomendasi Preskriptif
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mt-1.5 leading-relaxed">
+            Masukkan indikator operasional UMKM untuk memperoleh kalkulasi risiko kebangkrutan, proyeksi likuiditas, dan penalaran otomatis berstandar enterprise.
+          </p>
+        </div>
 
-          {/* Mobile Navigation Fallback + Quick Mode Info */}
-          <div className="flex items-center justify-between sm:justify-end gap-4">
-            <div className="flex md:hidden items-center gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => setActiveSection('DASHBOARD')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap ${
-                  activeSection === 'DASHBOARD' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                Dashboard
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection('SIMULATOR')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap ${
-                  activeSection === 'SIMULATOR' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                Input Data
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection('PORTFOLIO')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap ${
-                  activeSection === 'PORTFOLIO' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                Portofolio
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection('FLASK_API')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap ${
-                  activeSection === 'FLASK_API' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                Flask API
-              </button>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-              <span>Mesin Inferensi:</span>
-              <button
-                type="button"
-                onClick={() => setActiveSection('FLASK_API')}
-                className="font-mono font-medium text-slate-800 hover:underline cursor-pointer"
-              >
-                {flaskConfig.mode === 'FLASK_API_LIVE'
-                  ? 'Flask Python Endpoint (Live)'
-                  : 'Model Terkalibrasi (Siap Integrasi Flask)'}
-              </button>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-5">
+            <DiagnosticForm
+              input={input}
+              onInputChange={setInput}
+              onSubmit={handleSubmit}
+              onReset={reset}
+              onPresetSelect={loadPreset}
+              isLoading={isLoading}
+            />
+          </div>
+          <div className="lg:col-span-7">
+            <DiagnosticResultCard
+              result={result}
+              isLoading={isLoading}
+              onReset={reset}
+            />
           </div>
         </div>
-      </div>
-
-      {/* Notification Banner if present */}
-      {toastNotice && (
-        <div className="max-w-[1360px] w-full mx-auto px-6 pt-4">
-          <div className="bg-slate-900 text-white px-4 py-2.5 rounded-lg text-xs font-medium flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>{toastNotice}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setToastNotice(null)}
-              className="text-slate-400 hover:text-white text-xs ml-4 cursor-pointer"
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content Container */}
-      <main className="flex-1 max-w-[1360px] w-full mx-auto px-6 py-6">
-        {activeSection === 'DASHBOARD' && (
-          <DashboardAnalyticsView
-            record={activeRecord}
-            onExportPDF={() => handleExportPDF(activeRecord)}
-            onOpenSimulator={() => setActiveSection('SIMULATOR')}
-          />
-        )}
-
-        {activeSection === 'SIMULATOR' && (
-          <UMKMInputSimulator
-            initialInput={activeRecord.input}
-            onRunAnalysis={handleRunAnalysis}
-            isLoading={isAnalyzing}
-          />
-        )}
-
-        {activeSection === 'PORTFOLIO' && (
-          <PortfolioDirectoryView
-            records={records}
-            selectedId={selectedId}
-            onSelectRecord={(id) => {
-              setSelectedId(id);
-              setActiveSection('DASHBOARD');
-            }}
-            onExportSinglePDF={(rec) => handleExportPDF(rec)}
-          />
-        )}
-
-        {activeSection === 'FLASK_API' && (
-          <FlaskIntegrationView
-            config={flaskConfig}
-            sampleInput={activeRecord.input}
-            onUpdateConfig={setFlaskConfig}
-            onTestConnection={handleTestFlaskConnection}
-          />
-        )}
       </main>
 
-      {/* Quiet Editorial Footer */}
-      <footer className="bg-white border-t border-slate-200 px-6 py-4 mt-12">
-        <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-          <div>
-            KatalisUMKM — Platform Visualisasi & Diagnostik Pertumbuhan UMKM Berbasis AI
+      <footer className="border-t border-slate-200/80 bg-white/60 backdrop-blur-sm py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-slate-800">AOL AI</span>
+            <span className="text-slate-500">— Sistem Analisis Kesehatan & Ketahanan Bisnis UMKM</span>
           </div>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setActiveSection('FLASK_API')}
-              className="hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              Dokumentasi Endpoint Flask
-            </button>
-            <span aria-hidden="true">·</span>
-            <button
-              type="button"
-              onClick={() => handleExportPDF(activeRecord)}
-              className="hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              Cetak Laporan PDF ({activeRecord.input.id})
-            </button>
+          <div className="flex items-center space-x-3 text-slate-500 text-[11px]">
+            <span>Solusi Cerdas Pertumbuhan & Keberlanjutan Usaha</span>
+            <span>·</span>
+            <span className="text-emerald-600 font-semibold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Pembaruan Otomatis 2025
+            </span>
           </div>
         </div>
       </footer>
+
+      <Toast msg={toastMsg} />
     </div>
   );
 }

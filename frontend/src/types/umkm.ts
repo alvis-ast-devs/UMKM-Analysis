@@ -1,101 +1,35 @@
-export type GrowthStatus = 'BERKEMBANG' | 'TRANSISI' | 'STAGNAN';
-
-export interface MonthlyMetric {
-  month: string;
-  omzetJuta: number;
-  biayaOperasionalJuta: number;
-  labaBersihJuta: number;
-  jumlahTransaksi: number;
-  pelangganBaru: number;
-  pelangganBerulang: number;
+// Diagnostic payload sesuai desain code.html (5 parameter)
+export interface DiagnosticInput {
+  netProfitMargin: number;
+  burnRateRatio: number;
+  repeatOrderRate: number;
+  transactionCount: number;
+  peakHourLatency: 'Low' | 'Med' | 'High';
 }
 
-export interface FeatureContribution {
-  featureKey: string;
-  label: string;
-  valueFormatted: string;
-  weightPercentage: number;
-  impactScore: number; // -100 to +100
-  direction: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
-  benchmarkComparison: string;
-}
+export type DiagnosticVariant = 'PRIMA_HIJAU' | 'KRITIS_MERAH';
 
-export interface DimensionScore {
-  dimension: string;
-  score: number; // 0 - 100
-  sectorBenchmark: number; // 0 - 100
-}
-
-export interface ActionRecommendation {
-  id: string;
-  priority: 'TINGGI' | 'SEDANG' | 'RENDAH';
-  category: 'KEUANGAN' | 'PEMASARAN_DIGITAL' | 'OPERASIONAL' | 'RETENSI_PELANGGAN';
-  title: string;
-  targetMetric: string;
-  estimatedImpact: string;
-  actionSteps: string[];
-}
-
-export interface UMKMInputPayload {
-  id: string;
-  namaUsaha: string;
-  sektor: 'Kuliner (F&B)' | 'Kriya & Fashion' | 'Agribisnis & Olahan' | 'Jasa & Perdagangan' | 'Manufaktur Mikro';
-  kotaKabupaten: string;
-  lamaBeroperasiTahun: number;
-  jumlahKaryawan: number;
-  // Financial & Operational features fed to the AI model
-  omzetBulananRataRataJuta: number;
-  pertumbuhanOmzetMoMPersen: number;
-  marginLabaBersihPersen: number;
-  rasioArusKasOperasional: number; // > 1.0 healthy
-  rasioUtangTerhadapAsetPersen: number;
-  // Customer & Market features
-  tingkatRetensiPelangganPersen: number;
-  pertumbuhanPelangganBaruPersen: number;
-  rataRataNilaiTransaksiRibu: number;
-  // Digital & Innovation features
-  skorAdopsiDigital: number; // 0 - 100 (QRIS, Pencatatan Digital, Marketplace, Social Commerce)
-  rasioPenjualanOnlinePersen: number;
-  frekuensiInovasiProdukPerTahun: number;
-  perputaranPersediaanHari: number;
-  // Historical 6-month series
-  riwayatBulanan: MonthlyMetric[];
-}
-
-export interface AIModelPredictionResult {
-  umkmId: string;
-  timestamp: string;
-  status: GrowthStatus;
-  growthProbabilityScore: number; // 0 - 100 (e.g., 82.4% confidence of growing / health index)
-  modelConfidencePersen: number;
-  ringkasanEksekutif: string;
-  indikatorUtama: {
-    cagr6BulanPersen: number;
-    efisiensiBiayaPersen: number;
-    indeksKetahananKasBulan: number;
-    produktivitasPerKaryawanJuta: number;
+export interface DiagnosticResult {
+  variant: DiagnosticVariant;
+  status: 'CRITICAL' | 'ELITE' | 'PRIMA';
+  status_id: 0 | 1 | 2;
+  health_score: number;
+  confidence: number;
+  risk_level: string;
+  metrics_summary: {
+    net_profit_margin: number;
+    burn_rate_ratio: number;
+    repeat_order_rate: number;
+    transaction_count: number;
+    peak_hour_latency: 'Low' | 'Med' | 'High';
   };
-  dimensiSkor: DimensionScore[];
-  kontribusiFitur: FeatureContribution[];
-  proyeksiOmzet3Bulan: {
-    month: string;
-    baselineJuta: number;
-    optimisJuta: number;
-  }[];
-  rekomendasiStrategis: ActionRecommendation[];
+  ai_narration: string;
+  prescriptive_actions: string[];
+  shap_top_drivers: { feature: string; impact: string }[];
+  timestamp: string;
 }
 
-export interface UMKMRecord {
-  input: UMKMInputPayload;
-  analysis: AIModelPredictionResult;
-}
-
-export interface FlaskBackendConfig {
-  endpointUrl: string;
-  mode: 'SIMULASI_LOKAL' | 'FLASK_API_LIVE';
-  apiKeyHeader?: string;
-  timeoutMs: number;
-  lastTestedAt?: string;
-  connectionStatus: 'UNTESTED' | 'CONNECTED' | 'ERROR';
-  errorMessage?: string;
+export interface DiagnosticPreset {
+  label: string;
+  values: DiagnosticInput;
 }
