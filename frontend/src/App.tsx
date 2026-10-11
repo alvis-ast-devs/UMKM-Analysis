@@ -32,7 +32,7 @@ const PRESETS: DiagnosticPreset[] = [
 ];
 
 export default function App() {
-    const [input, setInput] = useState<DiagnosticInput>({
+  const [input, setInput] = useState<DiagnosticInput>({
     netProfitMargin: 24.5,
     burnRateRatio: 0.68,
     repeatOrderRate: 42.0,
@@ -65,7 +65,7 @@ export default function App() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 1800);
 
-      const response = await fetch('http://localhost:8000/predict-simple', {
+      const response = await fetch('http://localhost:8000/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,66 +88,66 @@ export default function App() {
 
         const resultFromBackend: DiagnosticResult = isCritical
           ? {
-              variant: 'KRITIS_MERAH',
-              status: backendStatus === 'Critical' ? 'CRITICAL' : 'STRUGGLING',
-              status_id: 0,
-              health_score: Math.max(
-                18,
-                Math.round(
-                  50 -
-                    (data.raw_inputs?.Burn_Rate_Ratio as number) * 15 +
-                    (data.raw_inputs?.Net_Profit_Margin as number) * 0.8
-                )
-              ),
-              confidence: 0.948,
-              risk_level: 'Tinggi (High Vulnerability)',
-              metrics_summary: {
-                net_profit_margin: data.raw_inputs?.Net_Profit_Margin as number,
-                burn_rate_ratio: data.raw_inputs?.Burn_Rate_Ratio as number,
-                repeat_order_rate: data.raw_inputs?.Repeat_Order_Rate as number,
-                transaction_count: data.raw_inputs?.Transaction_Count as number,
-                peak_hour_latency: data.raw_inputs?.Peak_Hour_Latency as 'Low' | 'Med' | 'High',
-              },
-              ai_narration: data.narration as string,
-              prescriptive_actions: [
-                `Lakukan audit rasio pengeluaran operasional (Opex) untuk menekan Burn Rate ke bawah 0.9x.`,
-                `Restrukturisasi margin harga produk atau kurangi diskon yang menggerus profit bersih.`,
-                `Tingkatkan program retensi pelanggan untuk mendongkrak Repeat Order.`,
-              ],
-              shap_top_drivers: [
-                { feature: 'burn_rate_ratio', impact: '+42% risk' },
-                { feature: 'net_profit_margin', impact: '+35% risk' },
-                { feature: 'repeat_order_rate', impact: '+15% risk' },
-              ],
-              timestamp: new Date().toISOString(),
-            }
+            variant: 'KRITIS_MERAH',
+            status: backendStatus === 'Critical' ? 'CRITICAL' : 'STRUGGLING',
+            status_id: 0,
+            health_score: Math.max(
+              18,
+              Math.round(
+                50 -
+                (data.raw_inputs?.Burn_Rate_Ratio as number) * 15 +
+                (data.raw_inputs?.Net_Profit_Margin as number) * 0.8
+              )
+            ),
+            confidence: 0.948,
+            risk_level: 'Tinggi (High Vulnerability)',
+            metrics_summary: {
+              net_profit_margin: data.raw_inputs?.Net_Profit_Margin as number,
+              burn_rate_ratio: data.raw_inputs?.Burn_Rate_Ratio as number,
+              repeat_order_rate: data.raw_inputs?.Repeat_Order_Rate as number,
+              transaction_count: data.raw_inputs?.Transaction_Count as number,
+              peak_hour_latency: data.raw_inputs?.Peak_Hour_Latency as 'Low' | 'Med' | 'High',
+            },
+            ai_narration: data.narration as string,
+            prescriptive_actions: [
+              `Lakukan audit rasio pengeluaran operasional (Opex) untuk menekan Burn Rate ke bawah 0.9x.`,
+              `Restrukturisasi margin harga produk atau kurangi diskon yang menggerus profit bersih.`,
+              `Tingkatkan program retensi pelanggan untuk mendongkrak Repeat Order.`,
+            ],
+            shap_top_drivers: [
+              { feature: 'burn_rate_ratio', impact: '+42% risk' },
+              { feature: 'net_profit_margin', impact: '+35% risk' },
+              { feature: 'repeat_order_rate', impact: '+15% risk' },
+            ],
+            timestamp: new Date().toISOString(),
+          }
           : {
-              variant: 'PRIMA_HIJAU',
-              status: backendStatus === 'Elite' ? 'ELITE' : 'GROWTH',
-              status_id: 2,
-              health_score: 92,
-              confidence: 0.982,
-              risk_level: 'Sangat Sehat',
-              metrics_summary: {
-                net_profit_margin: data.raw_inputs?.Net_Profit_Margin as number,
-                burn_rate_ratio: data.raw_inputs?.Burn_Rate_Ratio as number,
-                repeat_order_rate: data.raw_inputs?.Repeat_Order_Rate as number,
-                transaction_count: data.raw_inputs?.Transaction_Count as number,
-                peak_hour_latency: data.raw_inputs?.Peak_Hour_Latency as 'Low' | 'Med' | 'High',
-              },
-              ai_narration: data.narration as string,
-              prescriptive_actions: [
-                `<strong>Ekspansi Skala Operasional:</strong> Alokasikan sebagian surplus laba bersih untuk memperluas jangkauan pasar atau membuka cabang baru.`,
-                `<strong>Program VIP & Maksimalisasi LTV:</strong> Optimalkan basis pelanggan setia dengan penawaran eksklusif dan paket bundling ber-margin tinggi.`,
-                `<strong>Dana Cadangan & Investasi Otomatisasi:</strong> Bentuk cadangan kas darurat minimum 6 bulan operasional dan mulai otomatisasi alur kerja.`,
-              ],
-              shap_top_drivers: [
-                { feature: 'net_profit_margin', impact: '+45% health' },
-                { feature: 'burn_rate_ratio', impact: '+30% health' },
-                { feature: 'repeat_order_rate', impact: '+18% health' },
-              ],
-              timestamp: new Date().toISOString(),
-            };
+            variant: 'PRIMA_HIJAU',
+            status: backendStatus === 'Elite' ? 'ELITE' : 'GROWTH',
+            status_id: 2,
+            health_score: 92,
+            confidence: 0.982,
+            risk_level: 'Sangat Sehat',
+            metrics_summary: {
+              net_profit_margin: data.raw_inputs?.Net_Profit_Margin as number,
+              burn_rate_ratio: data.raw_inputs?.Burn_Rate_Ratio as number,
+              repeat_order_rate: data.raw_inputs?.Repeat_Order_Rate as number,
+              transaction_count: data.raw_inputs?.Transaction_Count as number,
+              peak_hour_latency: data.raw_inputs?.Peak_Hour_Latency as 'Low' | 'Med' | 'High',
+            },
+            ai_narration: data.narration as string,
+            prescriptive_actions: [
+              `<strong>Ekspansi Skala Operasional:</strong> Alokasikan sebagian surplus laba bersih untuk memperluas jangkauan pasar atau membuka cabang baru.`,
+              `<strong>Program VIP & Maksimalisasi LTV:</strong> Optimalkan basis pelanggan setia dengan penawaran eksklusif dan paket bundling ber-margin tinggi.`,
+              `<strong>Dana Cadangan & Investasi Otomatisasi:</strong> Bentuk cadangan kas darurat minimum 6 bulan operasional dan mulai otomatisasi alur kerja.`,
+            ],
+            shap_top_drivers: [
+              { feature: 'net_profit_margin', impact: '+45% health' },
+              { feature: 'burn_rate_ratio', impact: '+30% health' },
+              { feature: 'repeat_order_rate', impact: '+18% health' },
+            ],
+            timestamp: new Date().toISOString(),
+          };
 
         setResult(resultFromBackend);
       } else {
@@ -170,37 +170,37 @@ export default function App() {
 
       const fallbackResult: DiagnosticResult = isCritical
         ? {
-            variant: 'KRITIS_MERAH',
-            status: 'CRITICAL',
-            status_id: 0,
-            health_score: Math.max(
-              18,
-              Math.round(50 - input.burnRateRatio * 15 + input.netProfitMargin * 0.8)
-            ),
-            confidence: 0.948,
-            risk_level: 'Tinggi (High Vulnerability)',
-            metrics_summary: {
-              net_profit_margin: input.netProfitMargin,
-              burn_rate_ratio: input.burnRateRatio,
-              repeat_order_rate: input.repeatOrderRate,
-              transaction_count: input.transactionCount,
-              peak_hour_latency: input.peakHourLatency,
-            },
-            ai_narration: `Penyebab utama status [CRITICAL] adalah Burn Rate Ratio (${input.burnRateRatio}x) yang telah melampaui ambang batas aman 1.0, diperburuk dengan Net Profit Margin sebesar ${input.netProfitMargin}%. Kondisi ini mengindikasikan struktur kas operasional mengalami defisit dan rentan terhadap kehabisan runway dalam kuartal mendatang jika efisiensi biaya tidak segera diberlakukan.`,
-            prescriptive_actions: [
-              `Lakukan audit rasio pengeluaran operasional (Opex) untuk menekan Burn Rate ke bawah 0.9x.`,
-              `Restrukturisasi margin harga produk atau kurangi diskon yang menggerus profit bersih (${input.netProfitMargin}%).`,
-              `Tingkatkan program retensi pelanggan untuk mendongkrak Repeat Order dari ${input.repeatOrderRate}% menjadi minimal 25%.`,
-            ],
-            shap_top_drivers: [
-              { feature: 'burn_rate_ratio', impact: '+42% risk' },
-              { feature: 'net_profit_margin', impact: '+35% risk' },
-              { feature: 'repeat_order_rate', impact: '+15% risk' },
-            ],
-            timestamp: new Date().toISOString(),
-          }
+          variant: 'KRITIS_MERAH',
+          status: 'CRITICAL',
+          status_id: 0,
+          health_score: Math.max(
+            18,
+            Math.round(50 - input.burnRateRatio * 15 + input.netProfitMargin * 0.8)
+          ),
+          confidence: 0.948,
+          risk_level: 'Tinggi (High Vulnerability)',
+          metrics_summary: {
+            net_profit_margin: input.netProfitMargin,
+            burn_rate_ratio: input.burnRateRatio,
+            repeat_order_rate: input.repeatOrderRate,
+            transaction_count: input.transactionCount,
+            peak_hour_latency: input.peakHourLatency,
+          },
+          ai_narration: `Penyebab utama status [CRITICAL] adalah Burn Rate Ratio (${input.burnRateRatio}x) yang telah melampaui ambang batas aman 1.0, diperburuk dengan Net Profit Margin sebesar ${input.netProfitMargin}%. Kondisi ini mengindikasikan struktur kas operasional mengalami defisit dan rentan terhadap kehabisan runway dalam kuartal mendatang jika efisiensi biaya tidak segera diberlakukan.`,
+          prescriptive_actions: [
+            `Lakukan audit rasio pengeluaran operasional (Opex) untuk menekan Burn Rate ke bawah 0.9x.`,
+            `Restrukturisasi margin harga produk atau kurangi diskon yang menggerus profit bersih (${input.netProfitMargin}%).`,
+            `Tingkatkan program retensi pelanggan untuk mendongkrak Repeat Order dari ${input.repeatOrderRate}% menjadi minimal 25%.`,
+          ],
+          shap_top_drivers: [
+            { feature: 'burn_rate_ratio', impact: '+42% risk' },
+            { feature: 'net_profit_margin', impact: '+35% risk' },
+            { feature: 'repeat_order_rate', impact: '+15% risk' },
+          ],
+          timestamp: new Date().toISOString(),
+        }
         : isPrima
-        ? {
+          ? {
             variant: 'PRIMA_HIJAU',
             status: 'PRIMA',
             status_id: 2,
@@ -227,7 +227,7 @@ export default function App() {
             ],
             timestamp: new Date().toISOString(),
           }
-        : {
+          : {
             variant: 'KRITIS_MERAH',
             status: 'ELITE',
             status_id: 1,
