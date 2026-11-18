@@ -1,0 +1,6 @@
+{
+  "name": "KatalisUMKM — Sistem Analisis Pertumbuhan & Diagnostik UMKM",
+  "description": "Dashboard analitik berbasis model prediktif untuk mengevaluasi status pertumbuhan atau stagnasi UMKM melalui visualisasi data multidimensi, integrasi Flask API, dan ekspor laporan PDF otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
